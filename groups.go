@@ -26,6 +26,7 @@ var (
 // https://msdn.microsoft.com/en-us/library/cc231196.aspx
 const (
 	NERR_GroupNotFound syscall.Errno = 2220 // 0x000008AC
+	NERR_GroupExists   syscall.Errno = 2223
 
 	ERROR_ACCESS_DENIED       syscall.Errno = 5    // 0x00000005
 	ERROR_MEMBER_NOT_IN_ALIAS syscall.Errno = 1377 // 0x00000561
@@ -259,7 +260,7 @@ func LocalGroupGetMembers(groupname string) ([]so.LocalGroupMember, error) {
 		var data = (*LOCALGROUP_MEMBERS_INFO_3)(unsafe.Pointer(iter))
 
 		domainAndUsername := UTF16toString(data.Lgrmi3_domainandname)
-		split := strings.SplitN(domainAndUsername, "\\", 1)
+		split := strings.SplitN(domainAndUsername, "\\", 2)
 		var domain, name string
 		if len(split) > 1 {
 			domain = split[0]
