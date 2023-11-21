@@ -4,6 +4,7 @@
 package winapi
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -24,6 +25,8 @@ var (
 	usrNetLocalGroupAddMembers = modNetapi32.NewProc("NetLocalGroupAddMembers")
 	usrNetLocalGroupDelMembers = modNetapi32.NewProc("NetLocalGroupDelMembers")
 	usrNetApiBufferFree        = modNetapi32.NewProc("NetApiBufferFree")
+
+	ErrUserExists = errors.New("user already exists")
 )
 
 const (
@@ -35,6 +38,7 @@ const (
 	NET_API_STATUS_NERR_BadPassword                  = 2203
 	NET_API_STATUS_NERR_PasswordTooShort             = 2245
 	NET_API_STATUS_NERR_UserNotFound                 = 2221
+	NET_API_STATUS_NERR_UserExists                   = 2224
 	NET_API_STATUS_ERROR_ACCESS_DENIED               = 5
 	NET_API_STATUS_ERROR_NOT_ENOUGH_MEMORY           = 8
 	NET_API_STATUS_ERROR_INVALID_PARAMETER           = 87
@@ -128,16 +132,16 @@ type LOCALGROUP_MEMBERS_INFO_3 struct {
 // The only required fields are Username and Password.
 //
 // Fields:
-//	- Username		account username, limited to 20 characters.
-//	- Password 		account password
-//	- FullName		user's full name (default: none)
-//  - PrivLevel		account's prvilege level, must be one of the USER_PRIV_* constants
-//					(default: USER_PRIV_GUEST)
-// 	- HomeDir		If non-empty, the user's home directory is set to the specified
-//					path.
-//	- Comment		A comment to associate with the account (default: none)
-//	- ScriptPath 	If non-empty, the path to the user's logon script file, which can
-//					be a .CMD, .EXE, or .BAT file. (default: none)
+//   - Username		account username, limited to 20 characters.
+//   - Password 		account password
+//   - FullName		user's full name (default: none)
+//   - PrivLevel		account's prvilege level, must be one of the USER_PRIV_* constants
+//     (default: USER_PRIV_GUEST)
+//   - HomeDir		If non-empty, the user's home directory is set to the specified
+//     path.
+//   - Comment		A comment to associate with the account (default: none)
+//   - ScriptPath 	If non-empty, the path to the user's logon script file, which can
+//     be a .CMD, .EXE, or .BAT file. (default: none)
 type UserAddOptions struct {
 	// Required
 	Username string
@@ -193,7 +197,11 @@ func UserAddEx(opts UserAddOptions) (bool, error) {
 		uintptr(unsafe.Pointer(&uInfo)),
 		uintptr(unsafe.Pointer(&parmErr)),
 	)
-	if ret != NET_API_STATUS_NERR_Success {
+	switch ret {
+	case NET_API_STATUS_NERR_Success:
+	case NET_API_STATUS_NERR_UserExists:
+		return false, ErrUserExists
+	default:
 		return false, fmt.Errorf("Unable to process: status=%d error=%d", ret, parmErr)
 	}
 	if opts.FullName != "" {
