@@ -251,7 +251,8 @@ func LocalGroupGetMembers(groupname string) ([]so.LocalGroupMember, error) {
 	if ret != NET_API_STATUS_NERR_Success {
 		return nil, syscall.Errno(ret)
 	} else if dataPointer == uintptr(0) {
-		return nil, fmt.Errorf("null pointer while fetching entry")
+		// return nil, fmt.Errorf("null pointer while fetching entry")
+		return []so.LocalGroupMember{}, nil
 	}
 	defer usrNetApiBufferFree.Call(dataPointer)
 
