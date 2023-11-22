@@ -26,6 +26,10 @@ var (
 	usrNetLocalGroupDelMembers = modNetapi32.NewProc("NetLocalGroupDelMembers")
 	usrNetApiBufferFree        = modNetapi32.NewProc("NetApiBufferFree")
 
+	modAdvApi32   = syscall.NewLazyDLL("advapi32.dll")
+	advLogonUserA = modAdvApi32.NewProc("LogonUserA")
+	advLogonUserW = modAdvApi32.NewProc("LogonUserW")
+
 	ErrUserExists = errors.New("user already exists")
 )
 
@@ -63,6 +67,18 @@ const (
 	USER_UF_PASSWD_CANT_CHANGE = 64
 	USER_UF_NORMAL_ACCOUNT     = 512
 	USER_UF_DONT_EXPIRE_PASSWD = 65536
+	USER_UF_PASSWORD_EXPIRED   = 8388608
+
+	LOGON32_LOGON_INTERACTIVE       = 2
+	LOGON32_LOGON_NETWORK           = 3
+	LOGON32_LOGON_BATCH             = 4
+	LOGON32_LOGON_SERVICE           = 5
+	LOGON32_LOGON_UNLOCK            = 7
+	LOGON32_LOGON_NETWORK_CLEARTEXT = 8
+
+	LOGON32_PROVIDER_DEFAULT = 0
+	LOGON32_PROVIDER_WINNT40 = 2
+	LOGON32_PROVIDER_WINNT50 = 3
 )
 
 type USER_INFO_1 struct {
@@ -738,4 +754,50 @@ func DomainUserLocked(username string, domain string) (bool, error) {
 	data := (*USER_INFO_2)(unsafe.Pointer(dataPointer))
 
 	return (data.Usri2_flags & USER_UF_LOCKOUT) == USER_UF_LOCKOUT, nil
+}
+
+func VerifyPassword(username, domain, password string) (bool, error) {
+	uPointer, err := syscall.UTF16PtrFromString(username)
+	if err != nil {
+		return false, err
+	}
+
+	if domain == "" {
+		hn, _ := os.Hostname()
+		domain = hn
+	}
+
+	dPointer, err := syscall.UTF16PtrFromString(domain)
+	if err != nil {
+		return false, err
+	}
+
+	var pPointer *uint16
+	if password != "" {
+		pPointer, err = syscall.UTF16PtrFromString(password)
+		if err != nil {
+			return false, err
+		}
+	} else {
+		var v uint16 = 0
+		pPointer = &v
+	}
+
+	var phToken uintptr
+
+	ret, _, err := advLogonUserW.Call(
+		uintptr(unsafe.Pointer(uPointer)),
+		uintptr(unsafe.Pointer(dPointer)),
+		uintptr(unsafe.Pointer(pPointer)),
+		LOGON32_LOGON_NETWORK,
+		LOGON32_PROVIDER_DEFAULT,
+		uintptr(unsafe.Pointer(&phToken)),
+	)
+	defer procCloseHandle.Call(phToken)
+
+	if ret == 0 {
+		return false, err
+	}
+
+	return true, nil
 }
