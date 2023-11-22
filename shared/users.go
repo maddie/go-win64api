@@ -16,4 +16,5 @@ type LocalUser struct {
 	LastLogon            time.Time     `json:"lastLogon"`
 	BadPasswordCount     uint32        `json:"badPasswordCount"`
 	NumberOfLogons       uint32        `json:"numberOfLogons"`
+	Comment              string        `json:"comment"`
 }

@@ -115,6 +115,10 @@ type USER_INFO_1011 struct {
 	Usri1011_full_name *uint16
 }
 
+type USER_INFO_1012 struct {
+	Usri1012_comment *uint16
+}
+
 // USER_INFO_1052 is the Go representation of the Windwos _USER_INFO_1052 struct
 // used to set a user's profile directory.
 //
@@ -350,10 +354,11 @@ func ListLocalUsers() ([]so.LocalUser, error) {
 		ud := so.LocalUser{
 			Username:         UTF16toString(data.Usri2_name),
 			FullName:         UTF16toString(data.Usri2_full_name),
-			PasswordAge:      (time.Duration(data.Usri2_password_age) * time.Second),
+			PasswordAge:      time.Duration(data.Usri2_password_age) * time.Second,
 			LastLogon:        time.Unix(int64(data.Usri2_last_logon), 0),
 			BadPasswordCount: data.Usri2_bad_pw_count,
 			NumberOfLogons:   data.Usri2_num_logons,
+			Comment:          UTF16toString(data.Usri2_comment),
 		}
 
 		if (data.Usri2_flags & USER_UF_ACCOUNTDISABLE) != USER_UF_ACCOUNTDISABLE {
@@ -462,6 +467,30 @@ func UserUpdateFullname(username string, fullname string) (bool, error) {
 		uintptr(unsafe.Pointer(uPointer)), // username
 		uintptr(uint32(1011)),             // level
 		uintptr(unsafe.Pointer(&USER_INFO_1011{Usri1011_full_name: fPointer})),
+		uintptr(unsafe.Pointer(&errParam)),
+	)
+	if ret != NET_API_STATUS_NERR_Success {
+		return false, fmt.Errorf("unable to process. %d", ret)
+	}
+	return true, nil
+}
+
+// UserUpdateComment changes the comment attached to the user's account
+func UserUpdateComment(username, comment string) (bool, error) {
+	var errParam uint32
+	uPointer, err := syscall.UTF16PtrFromString(username)
+	if err != nil {
+		return false, fmt.Errorf("unable to encode username to UTF16")
+	}
+	cPointer, err := syscall.UTF16PtrFromString(comment)
+	if err != nil {
+		return false, fmt.Errorf("unable to encode comment to UTF16")
+	}
+	ret, _, _ := usrNetUserSetInfo.Call(
+		uintptr(0),                        // servername
+		uintptr(unsafe.Pointer(uPointer)), // username
+		uintptr(uint32(1012)),             // level
+		uintptr(unsafe.Pointer(&USER_INFO_1012{Usri1012_comment: cPointer})),
 		uintptr(unsafe.Pointer(&errParam)),
 	)
 	if ret != NET_API_STATUS_NERR_Success {
