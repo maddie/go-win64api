@@ -157,6 +157,18 @@ type UserAddOptions struct {
 	HomeDir    string
 	Comment    string
 	ScriptPath string
+	Flags      *uint32
+}
+
+type UserUpdateOptions struct {
+	Username string
+	Password string
+
+	FullName   string
+	HomeDir    string
+	Comment    string
+	ScriptPath string
+	Flags      *uint32
 }
 
 // UserAddEx creates a new user account.
@@ -166,8 +178,12 @@ func UserAddEx(opts UserAddOptions) (bool, error) {
 	var parmErr uint32
 	var err error
 	uInfo := USER_INFO_1{
-		Usri1_priv:  opts.PrivLevel,
-		Usri1_flags: USER_UF_SCRIPT | USER_UF_NORMAL_ACCOUNT | USER_UF_DONT_EXPIRE_PASSWD,
+		Usri1_priv: opts.PrivLevel,
+	}
+	if opts.Flags == nil {
+		uInfo.Usri1_flags = USER_UF_SCRIPT | USER_UF_NORMAL_ACCOUNT | USER_UF_DONT_EXPIRE_PASSWD
+	} else {
+		uInfo.Usri1_flags = *opts.Flags
 	}
 	uInfo.Usri1_name, err = syscall.UTF16PtrFromString(opts.Username)
 	if err != nil {
@@ -231,6 +247,36 @@ func UserAdd(username string, fullname string, password string) (bool, error) {
 		FullName:  fullname,
 		PrivLevel: USER_PRIV_USER,
 	})
+}
+
+func UserUpdateEx(opts UserUpdateOptions) (bool, error) {
+	username := opts.Username
+
+	if opts.Password != "" {
+		if ok, err := ChangePassword(username, opts.Password); err != nil || !ok {
+			return ok, err
+		}
+	}
+
+	if opts.FullName != "" {
+		if ok, err := UserUpdateFullname(username, opts.FullName); err != nil || !ok {
+			return ok, err
+		}
+	}
+
+	if opts.Comment != "" {
+		if ok, err := UserUpdateComment(username, opts.Comment); err != nil || !ok {
+			return ok, err
+		}
+	}
+
+	if opts.Flags != nil {
+		if ok, err := userSetFlags(username, *opts.Flags); err != nil || !ok {
+			return ok, err
+		}
+	}
+
+	return true, nil
 }
 
 // UserDelete deletes the user with the given username.
