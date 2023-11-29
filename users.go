@@ -435,6 +435,9 @@ func ListLocalUsers() ([]so.LocalUser, error) {
 		if (data.Usri2_flags & USER_UF_DONT_EXPIRE_PASSWD) == USER_UF_DONT_EXPIRE_PASSWD {
 			ud.PasswordNeverExpires = true
 		}
+		if (data.Usri2_flags & USER_UF_PASSWORD_EXPIRED) == USER_UF_PASSWORD_EXPIRED {
+			ud.PasswordExpired = true
+		}
 		if data.Usri2_priv == USER_PRIV_ADMIN {
 			ud.IsAdmin = true
 		}

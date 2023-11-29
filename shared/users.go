@@ -17,4 +17,5 @@ type LocalUser struct {
 	BadPasswordCount     uint32        `json:"badPasswordCount"`
 	NumberOfLogons       uint32        `json:"numberOfLogons"`
 	Comment              string        `json:"comment"`
+	PasswordExpired      bool          `json:"passwordExpired"`
 }
