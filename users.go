@@ -26,9 +26,10 @@ var (
 	usrNetLocalGroupDelMembers = modNetapi32.NewProc("NetLocalGroupDelMembers")
 	usrNetApiBufferFree        = modNetapi32.NewProc("NetApiBufferFree")
 
-	modAdvApi32   = syscall.NewLazyDLL("advapi32.dll")
-	advLogonUserA = modAdvApi32.NewProc("LogonUserA")
-	advLogonUserW = modAdvApi32.NewProc("LogonUserW")
+	modAdvApi32     = syscall.NewLazyDLL("advapi32.dll")
+	advLogonUserA   = modAdvApi32.NewProc("LogonUserA")
+	advLogonUserW   = modAdvApi32.NewProc("LogonUserW")
+	advGetUserNameW = modAdvapi32.NewProc("GetUserNameW")
 
 	ErrUserExists = errors.New("user already exists")
 )
@@ -79,6 +80,8 @@ const (
 	LOGON32_PROVIDER_DEFAULT = 0
 	LOGON32_PROVIDER_WINNT40 = 2
 	LOGON32_PROVIDER_WINNT50 = 3
+
+	UNLEN = 256
 )
 
 type USER_INFO_1 struct {
@@ -185,6 +188,24 @@ type UserUpdateOptions struct {
 	Comment    string
 	ScriptPath string
 	Flags      *uint32
+}
+
+func CurrentUser() (string, bool, error) {
+	var size uint32
+	success, _, err := advGetUserNameW.Call(uintptr(0), uintptr(unsafe.Pointer(&size)))
+	if success == 0 {
+		if err != syscall.ERROR_INSUFFICIENT_BUFFER {
+			return "", false, err
+		}
+	}
+
+	buffer := make([]uint16, size)
+	success, _, err = advGetUserNameW.Call(uintptr(unsafe.Pointer(&buffer[0])), uintptr(unsafe.Pointer(&size)))
+	if success == 0 {
+		return "", false, err
+	}
+
+	return syscall.UTF16ToString(buffer), true, nil
 }
 
 // UserAddEx creates a new user account.
