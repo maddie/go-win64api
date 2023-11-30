@@ -126,16 +126,16 @@ type USER_INFO_1003 struct {
 	Usri1003_password *uint16
 }
 
+type USER_INFO_1007 struct {
+	Usri1007_comment *uint16
+}
+
 type USER_INFO_1008 struct {
 	Usri1008_flags uint32
 }
 
 type USER_INFO_1011 struct {
 	Usri1011_full_name *uint16
-}
-
-type USER_INFO_1012 struct {
-	Usri1012_comment *uint16
 }
 
 // USER_INFO_1052 is the Go representation of the Windwos _USER_INFO_1052 struct
@@ -262,7 +262,7 @@ func UserAddEx(opts UserAddOptions) (bool, error) {
 		return false, fmt.Errorf("Unable to process: status=%d error=%d", ret, parmErr)
 	}
 	if opts.FullName != "" {
-		ok, err := UserUpdateFullname(opts.Username, opts.FullName)
+		ok, err := UserUpdateFullName(opts.Username, opts.FullName)
 		if err != nil {
 			return false, fmt.Errorf("Unable to set full name: %s", err)
 		}
@@ -295,16 +295,16 @@ func UserUpdateEx(opts UserUpdateOptions) (bool, error) {
 		}
 	}
 
-	if opts.FullName != "" {
-		if ok, err := UserUpdateFullname(username, opts.FullName); err != nil || !ok {
-			return ok, err
-		}
+	if opts.FullName == "" {
+		opts.FullName = opts.Username
 	}
 
-	if opts.Comment != "" {
-		if ok, err := UserUpdateComment(username, opts.Comment); err != nil || !ok {
-			return ok, err
-		}
+	if ok, err := UserUpdateFullName(username, opts.FullName); err != nil || !ok {
+		return ok, err
+	}
+
+	if ok, err := UserUpdateComment(username, opts.Comment); err != nil || !ok {
+		return ok, err
 	}
 
 	if opts.Flags != nil {
@@ -538,7 +538,7 @@ func RevokeAdmin(username string) (bool, error) {
 }
 
 // UserUpdateFullName changes the full name attached to the user's account.
-func UserUpdateFullname(username string, fullname string) (bool, error) {
+func UserUpdateFullName(username string, fullname string) (bool, error) {
 	var errParam uint32
 	uPointer, err := syscall.UTF16PtrFromString(username)
 	if err != nil {
@@ -575,8 +575,8 @@ func UserUpdateComment(username, comment string) (bool, error) {
 	ret, _, _ := usrNetUserSetInfo.Call(
 		uintptr(0),                        // servername
 		uintptr(unsafe.Pointer(uPointer)), // username
-		uintptr(uint32(1012)),             // level
-		uintptr(unsafe.Pointer(&USER_INFO_1012{Usri1012_comment: cPointer})),
+		uintptr(uint32(1007)),             // level
+		uintptr(unsafe.Pointer(&USER_INFO_1007{Usri1007_comment: cPointer})),
 		uintptr(unsafe.Pointer(&errParam)),
 	)
 	if ret != NET_API_STATUS_NERR_Success {
