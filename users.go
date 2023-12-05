@@ -6,6 +6,7 @@ package winapi
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"syscall"
 	"time"
@@ -20,6 +21,8 @@ var (
 	usrNetUserAdd              = modNetapi32.NewProc("NetUserAdd")
 	usrNetUserDel              = modNetapi32.NewProc("NetUserDel")
 	usrNetGetAnyDCName         = modNetapi32.NewProc("NetGetAnyDCName")
+	usrNetUserGetGroups        = modNetapi32.NewProc("NetUserGetGroups")
+	usrNetUserGetLocalGroups   = modNetapi32.NewProc("NetUserGetLocalGroups")
 	usrNetUserGetInfo          = modNetapi32.NewProc("NetUserGetInfo")
 	usrNetUserSetInfo          = modNetapi32.NewProc("NetUserSetInfo")
 	usrNetLocalGroupAddMembers = modNetapi32.NewProc("NetLocalGroupAddMembers")
@@ -148,6 +151,14 @@ type USER_INFO_1052 struct {
 
 type LOCALGROUP_MEMBERS_INFO_3 struct {
 	Lgrmi3_domainandname *uint16
+}
+
+type GROUP_USERS_INFO_0 struct {
+	Grui0_name *uint16
+}
+
+type LOCALGROUP_USERS_INFO_0 struct {
+	Lgrui0_name *uint16
 }
 
 // UserAddOptions contains extended options for creating a new user account.
@@ -824,4 +835,137 @@ func VerifyPassword(username, domain, password string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func GetUserGroups(username, domain string) ([]string, bool, error) {
+	var dataPointer uintptr
+	var dcPointer uintptr
+	var servername uintptr
+
+	uPointer, err := syscall.UTF16PtrFromString(username)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if domain != "" {
+		dPointer, err := syscall.UTF16PtrFromString(domain)
+		if err != nil {
+			return nil, false, fmt.Errorf("Unable to encode domain to UTF16")
+		}
+
+		_, _, _ = usrNetGetAnyDCName.Call(
+			uintptr(0),                        // servername
+			uintptr(unsafe.Pointer(dPointer)), // domainame
+			uintptr(unsafe.Pointer(&dcPointer)),
+		)
+		servername = uintptr(dcPointer)
+		defer usrNetApiBufferFree.Call(uintptr(unsafe.Pointer(dcPointer)))
+	} else {
+		servername = uintptr(0)
+	}
+
+	var entriesRead, totalEntries uint32
+
+	ret, _, err := usrNetUserGetGroups.Call(
+		servername,                             // servername
+		uintptr(unsafe.Pointer(uPointer)),      // username
+		uintptr(uint32(0)),                     // level
+		uintptr(unsafe.Pointer(&dataPointer)),  // output
+		uintptr(uint32(math.MaxUint32)),        // prefmaxlen
+		uintptr(unsafe.Pointer(&entriesRead)),  // entriesread
+		uintptr(unsafe.Pointer(&totalEntries)), // totalentries
+	)
+
+	if ret != NET_API_STATUS_NERR_Success {
+		return nil, false, err
+	}
+	defer usrNetApiBufferFree.Call(uintptr(unsafe.Pointer(dataPointer)))
+
+	if dataPointer == uintptr(0) {
+		return nil, false, fmt.Errorf("Unable to get data structure.")
+	}
+
+	if totalEntries != entriesRead {
+		return nil, false, fmt.Errorf("should have read %d entries, got %d instead", totalEntries, entriesRead)
+	}
+
+	if entriesRead == 0 {
+		return []string{}, true, nil
+	}
+
+	groups := unsafe.Slice((*GROUP_USERS_INFO_0)(unsafe.Pointer(dataPointer)), entriesRead)
+
+	var result []string
+	for i := 0; i < int(entriesRead); i++ {
+		result = append(result, UTF16toString(groups[i].Grui0_name))
+	}
+
+	return result, true, nil
+}
+
+func GetUserLocalGroups(username, domain string) ([]string, bool, error) {
+	var dataPointer uintptr
+	var dcPointer uintptr
+	var servername uintptr
+
+	uPointer, err := syscall.UTF16PtrFromString(username)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if domain != "" {
+		dPointer, err := syscall.UTF16PtrFromString(domain)
+		if err != nil {
+			return nil, false, fmt.Errorf("Unable to encode domain to UTF16")
+		}
+
+		_, _, _ = usrNetGetAnyDCName.Call(
+			uintptr(0),                        // servername
+			uintptr(unsafe.Pointer(dPointer)), // domainame
+			uintptr(unsafe.Pointer(&dcPointer)),
+		)
+		servername = uintptr(dcPointer)
+		defer usrNetApiBufferFree.Call(uintptr(unsafe.Pointer(dcPointer)))
+	} else {
+		servername = uintptr(0)
+	}
+
+	var entriesRead, totalEntries uint32
+
+	ret, _, err := usrNetUserGetLocalGroups.Call(
+		servername,                             // servername
+		uintptr(unsafe.Pointer(uPointer)),      // username
+		uintptr(uint32(0)),                     // level
+		uintptr(uint32(1)),                     // flags
+		uintptr(unsafe.Pointer(&dataPointer)),  // output
+		uintptr(uint32(math.MaxUint32)),        // prefmaxlen
+		uintptr(unsafe.Pointer(&entriesRead)),  // entriesread
+		uintptr(unsafe.Pointer(&totalEntries)), // totalentries
+	)
+
+	if ret != NET_API_STATUS_NERR_Success {
+		return nil, false, err
+	}
+	defer usrNetApiBufferFree.Call(uintptr(unsafe.Pointer(dataPointer)))
+
+	if dataPointer == uintptr(0) {
+		return nil, false, fmt.Errorf("Unable to get data structure.")
+	}
+
+	if totalEntries != entriesRead {
+		return nil, false, fmt.Errorf("should have read %d entries, got %d instead", totalEntries, entriesRead)
+	}
+
+	if entriesRead == 0 {
+		return []string{}, true, nil
+	}
+
+	groups := unsafe.Slice((*LOCALGROUP_USERS_INFO_0)(unsafe.Pointer(dataPointer)), entriesRead)
+
+	var result []string
+	for i := 0; i < int(entriesRead); i++ {
+		result = append(result, UTF16toString(groups[i].Lgrui0_name))
+	}
+
+	return result, true, nil
 }
