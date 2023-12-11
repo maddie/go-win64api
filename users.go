@@ -84,7 +84,8 @@ const (
 	LOGON32_PROVIDER_WINNT40 = 2
 	LOGON32_PROVIDER_WINNT50 = 3
 
-	UNLEN = 256
+	UNLEN         = 256
+	TIMEQ_FOREVER = 0xFFFFFFFF
 )
 
 type USER_INFO_1 struct {
@@ -446,13 +447,14 @@ func ListLocalUsers() ([]so.LocalUser, error) {
 		var data = (*USER_INFO_2)(unsafe.Pointer(iter))
 
 		ud := so.LocalUser{
-			Username:         UTF16toString(data.Usri2_name),
-			FullName:         UTF16toString(data.Usri2_full_name),
-			PasswordAge:      time.Duration(data.Usri2_password_age) * time.Second,
-			LastLogon:        time.Unix(int64(data.Usri2_last_logon), 0),
-			BadPasswordCount: data.Usri2_bad_pw_count,
-			NumberOfLogons:   data.Usri2_num_logons,
-			Comment:          UTF16toString(data.Usri2_comment),
+			Username:          UTF16toString(data.Usri2_name),
+			FullName:          UTF16toString(data.Usri2_full_name),
+			PasswordAge:       time.Duration(data.Usri2_password_age) * time.Second,
+			LastLogon:         time.Unix(int64(data.Usri2_last_logon), 0),
+			PasswordExpiresOn: time.Unix(int64(data.Usri2_acct_expires), 0),
+			BadPasswordCount:  data.Usri2_bad_pw_count,
+			NumberOfLogons:    data.Usri2_num_logons,
+			Comment:           UTF16toString(data.Usri2_comment),
 		}
 
 		if (data.Usri2_flags & USER_UF_ACCOUNTDISABLE) != USER_UF_ACCOUNTDISABLE {
